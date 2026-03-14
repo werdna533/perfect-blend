@@ -16,6 +16,8 @@ interface BubbleChartProps {
   title: string;
 }
 
+type BubbleHierarchyDatum = { children?: BubbleRecord[] } | BubbleRecord;
+
 export default function BubbleChart({ data, categories, title }: BubbleChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -23,8 +25,12 @@ export default function BubbleChart({ data, categories, title }: BubbleChartProp
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [containerWidth, setContainerWidth] = useState(600);
 
-  // Derive unique class names preserving order
-  const classNames = Array.from(new Set(data.map(d => d.class_name)));
+  // Prefer the declared category order, then append any classes only present in the data.
+  const presentClasses = new Set(data.map(d => d.class_name));
+  const classNames = [
+    ...categories.map(category => category.name).filter(name => presentClasses.has(name)),
+    ...Array.from(presentClasses).filter(name => !categories.some(category => category.name === name)),
+  ];
   const colorMap = new Map(classNames.map((name, i) => [name, CLASS_COLORS[i % CLASS_COLORS.length]]));
 
   // Observe container width
@@ -65,19 +71,18 @@ export default function BubbleChart({ data, categories, title }: BubbleChartProp
     if (filteredData.length === 0) return;
 
     // Build hierarchy
-    const root = d3.hierarchy<{ children?: BubbleRecord[] }>({
+    const root = d3.hierarchy<BubbleHierarchyDatum>({
       children: filteredData,
     })
-      .sum((d: any) => Math.max(d.count || 0, 1))
+      .sum(d => ('count' in d ? Math.max(d.count, 1) : 0))
       .sort((a, b) => (b.value || 0) - (a.value || 0));
 
-    const pack = d3.pack<{ children?: BubbleRecord[] }>()
+    const pack = d3.pack<BubbleHierarchyDatum>()
       .size([chartWidth, height])
       .padding(2);
 
-    pack(root);
-
-    const leaves = root.leaves();
+    const packedRoot = pack(root);
+    const leaves = packedRoot.leaves();
 
     // Draw bubbles
     const nodes = svg
@@ -109,7 +114,7 @@ export default function BubbleChart({ data, categories, title }: BubbleChartProp
       .transition()
       .duration(600)
       .ease(d3.easeCubicOut)
-      .attr('r', d => d.r!);
+      .attr('r', d => d.r);
 
     // Hover
     nodes

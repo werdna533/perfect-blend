@@ -1,9 +1,10 @@
 fastapi[standard]
 uvicorn
 python-multipart
+python-dotenv
 pillow
 albumentations
 opencv-python-headless
 numpy
-ibm-watsonx-ai
+requests
 google-genai

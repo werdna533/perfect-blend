@@ -7,6 +7,8 @@ import os
 import re
 from typing import Any
 
+import requests
+
 from models import AnalysisResponse, Citation, ClassAnalysis, ClassDistribution
 
 
@@ -64,7 +66,7 @@ Respond with ONLY a JSON object (no markdown fences) in this exact schema:
 # ── watsonx.ai ──────────────────────────────────────────────────────
 
 def _call_watsonx(prompt: str) -> str | None:
-    """Call IBM watsonx.ai Granite model. Returns raw text or None on failure."""
+    """Call IBM watsonx.ai Granite model over HTTP. Returns raw text or None on failure."""
     api_key = os.environ.get("WATSONX_API_KEY")
     project_id = os.environ.get("WATSONX_PROJECT_ID")
     url = os.environ.get("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
@@ -73,24 +75,43 @@ def _call_watsonx(prompt: str) -> str | None:
         return None
 
     try:
-        from ibm_watsonx_ai.foundation_models import ModelInference
-        from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as Params
-
-        params = {
-            Params.MAX_NEW_TOKENS: 2048,
-            Params.TEMPERATURE: 0.3,
-            Params.REPETITION_PENALTY: 1.05,
-        }
-
-        model = ModelInference(
-            model_id="ibm/granite-3-8b-instruct",
-            credentials={"apikey": api_key, "url": url},
-            project_id=project_id,
-            params=params,
+        token_response = requests.post(
+            "https://iam.cloud.ibm.com/identity/token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
+                "apikey": api_key,
+            },
+            timeout=30,
         )
+        token_response.raise_for_status()
+        access_token = token_response.json()["access_token"]
 
-        result = model.generate_text(prompt=prompt)
-        return result if isinstance(result, str) else str(result)
+        generation_response = requests.post(
+            f"{url.rstrip('/')}/ml/v1/text/generation?version=2024-05-31",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            json={
+                "model_id": "ibm/granite-3-8b-instruct",
+                "input": prompt,
+                "project_id": project_id,
+                "parameters": {
+                    "max_new_tokens": 2048,
+                    "temperature": 0.3,
+                    "repetition_penalty": 1.05,
+                },
+            },
+            timeout=120,
+        )
+        generation_response.raise_for_status()
+        payload = generation_response.json()
+        results = payload.get("results", [])
+        if not results:
+            return None
+        return results[0].get("generated_text")
     except Exception as exc:  # noqa: BLE001
         print(f"[analyzer] watsonx error: {exc}")
         return None

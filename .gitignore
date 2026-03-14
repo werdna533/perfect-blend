@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+api/venv/
 backend/venv/
 __pycache__/
 *.pyc
@@ -11,8 +12,7 @@ dist-ssr/
 
 # Environment
 .env
-backend/.env
-frontend/.env
+api/.env
 
 # Dataset (large files)
 resized_dataset/
@@ -32,3 +32,4 @@ npm-debug.log*
 *.sw?
 
 .claude/
+CLAUDE.md
