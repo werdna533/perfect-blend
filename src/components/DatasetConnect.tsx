@@ -6,7 +6,7 @@ interface DatasetConnectProps {
 }
 
 export default function DatasetConnect({ onConnect, loading }: DatasetConnectProps) {
-  const [path, setPath] = useState('');
+  const [path, setPath] = useState('C:\\Users\\meime\\GenAIGenesis\\resized_dataset');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +34,7 @@ export default function DatasetConnect({ onConnect, loading }: DatasetConnectPro
               value={path}
               onChange={e => setPath(e.target.value)}
               placeholder="/path/to/your/dataset"
-              className="w-full px-4 py-3 border border-border bg-bg text-text text-sm focus:outline-none focus:border-berry"
+              className="w-full px-4 py-3 border border-border bg-bg text-text text-sm focus:outline-none focus:border-kiwi"
             />
           </div>
 
@@ -45,10 +45,7 @@ export default function DatasetConnect({ onConnect, loading }: DatasetConnectPro
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
+                <img src="/blender-gif.gif" alt="Loading" className="h-4 w-4 object-contain" />
                 Loading...
               </span>
             ) : (

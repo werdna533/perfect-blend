@@ -70,9 +70,11 @@ export default function App() {
       <header className="border-b border-border bg-surface px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-berry flex items-center justify-center">
-              <span className="text-white text-lg font-bold">B</span>
-            </div>
+            <img
+              src="/blender-img.png"
+              alt="PerfectBlend logo"
+              className="w-8 h-8 object-contain"
+            />
             <h1 className="text-xl font-bold text-text tracking-tight">
               Perfect<span className="text-berry">Blend</span>
             </h1>
@@ -186,7 +188,7 @@ export default function App() {
 }
 
 function AnalyzeForm({ onSubmit, loading }: { onSubmit: (purpose: string) => void; loading: boolean }) {
-  const [purpose, setPurpose] = useState('');
+  const [purpose, setPurpose] = useState('counting marine organisms from drop camera survey images around the Belcher islands to support fisheries and conservation efforts');
   return (
     <form
       onSubmit={e => {
@@ -200,14 +202,19 @@ function AnalyzeForm({ onSubmit, loading }: { onSubmit: (purpose: string) => voi
         value={purpose}
         onChange={e => setPurpose(e.target.value)}
         placeholder="e.g., Counting marine organisms for fisheries conservation on the Belcher Islands"
-        className="flex-1 px-4 py-3 border border-border bg-bg text-text text-sm focus:outline-none focus:border-berry"
+        className="flex-1 px-4 py-3 border border-border bg-bg text-text text-sm focus:outline-none focus:border-kiwi"
       />
       <button
         type="submit"
         disabled={loading || !purpose.trim()}
         className="px-6 py-3 bg-blueberry text-white font-medium text-sm hover:bg-blueberry/90 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? 'Analyzing...' : 'Analyze with AI'}
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <img src="/blender-gif.gif" alt="Loading" className="h-4 w-4 object-contain" />
+            Analyzing...
+          </span>
+        ) : 'Analyze with AI'}
       </button>
     </form>
   );

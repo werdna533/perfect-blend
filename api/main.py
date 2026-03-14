@@ -6,8 +6,14 @@ import asyncio
 import json
 from pathlib import Path
 
+import os
 from dotenv import load_dotenv
 load_dotenv()
+
+# Fix broken SSL_CERT_FILE env var (e.g. leftover from old RailsInstaller)
+_ssl_cert = os.environ.get("SSL_CERT_FILE", "")
+if _ssl_cert and not os.path.exists(_ssl_cert):
+    os.environ.pop("SSL_CERT_FILE", None)
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware

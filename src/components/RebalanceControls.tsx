@@ -75,7 +75,7 @@ export default function RebalanceControls({
                 min={0}
                 value={target.target_count}
                 onChange={e => handleTargetChange(target.class_name, Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-full px-2 py-1 text-sm text-right tabular-nums border border-border bg-bg text-text focus:outline-none focus:border-berry"
+                className="w-full px-2 py-1 text-sm text-right tabular-nums border border-border bg-bg text-text focus:outline-none focus:border-kiwi"
               />
               <div className="text-center">
                 <StrategyBadge strategy={target.strategy} />

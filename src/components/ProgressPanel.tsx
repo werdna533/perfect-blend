@@ -61,6 +61,11 @@ export default function ProgressPanel({
         {!done ? (
           <>
             <div>
+              <img
+                src="/blender-gif.gif"
+                alt="Blending in progress"
+                className="w-12 h-12 object-contain mx-auto mb-3"
+              />
               <h2 className="text-2xl font-bold text-text mb-1">
                 Blending in progress...
               </h2>

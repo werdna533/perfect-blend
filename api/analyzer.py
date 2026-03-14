@@ -11,6 +11,11 @@ import requests
 
 from models import AnalysisResponse, Citation, ClassAnalysis, ClassDistribution
 
+# Fix broken SSL_CERT_FILE env var (e.g. leftover from old RailsInstaller)
+_ssl_cert = os.environ.get("SSL_CERT_FILE", "")
+if _ssl_cert and not os.path.exists(_ssl_cert):
+    os.environ.pop("SSL_CERT_FILE", None)
+
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -66,12 +71,14 @@ Respond with ONLY a JSON object (no markdown fences) in this exact schema:
 # ── watsonx.ai ──────────────────────────────────────────────────────
 
 def _call_watsonx(prompt: str) -> str | None:
-    """Call IBM watsonx.ai Granite model over HTTP. Returns raw text or None on failure."""
+    """Call IBM watsonx.ai chat model over HTTP. Returns raw text or None on failure."""
     api_key = os.environ.get("WATSONX_API_KEY")
     project_id = os.environ.get("WATSONX_PROJECT_ID")
     url = os.environ.get("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
+    model_id = os.environ.get("WATSONX_MODEL_ID", "meta-llama/llama-3-3-70b-instruct")
 
     if not api_key or not project_id:
+        print("[analyzer] watsonx: missing WATSONX_API_KEY or WATSONX_PROJECT_ID")
         return None
 
     try:
@@ -87,19 +94,32 @@ def _call_watsonx(prompt: str) -> str | None:
         token_response.raise_for_status()
         access_token = token_response.json()["access_token"]
 
+        # Use /text/chat so Llama's chat template is applied correctly.
+        # /text/generation with raw "input" does not apply the instruct template
+        # and causes truncated / malformed JSON responses.
         generation_response = requests.post(
-            f"{url.rstrip('/')}/ml/v1/text/generation?version=2024-05-31",
+            f"{url.rstrip('/')}/ml/v1/text/chat?version=2024-05-31",
             headers={
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
             json={
-                "model_id": "ibm/granite-3-8b-instruct",
-                "input": prompt,
+                "model_id": model_id,
                 "project_id": project_id,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert MLOps data-quality engineer. "
+                            "You MUST respond with ONLY a valid JSON object — "
+                            "no markdown fences, no prose, no explanation outside the JSON."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
                 "parameters": {
-                    "max_new_tokens": 2048,
+                    "max_new_tokens": 4096,
                     "temperature": 0.3,
                     "repetition_penalty": 1.05,
                 },
@@ -108,10 +128,11 @@ def _call_watsonx(prompt: str) -> str | None:
         )
         generation_response.raise_for_status()
         payload = generation_response.json()
-        results = payload.get("results", [])
-        if not results:
+        choices = payload.get("choices", [])
+        if not choices:
+            print(f"[analyzer] watsonx: empty choices in response: {payload}")
             return None
-        return results[0].get("generated_text")
+        return choices[0].get("message", {}).get("content")
     except Exception as exc:  # noqa: BLE001
         print(f"[analyzer] watsonx error: {exc}")
         return None
@@ -122,32 +143,31 @@ def _call_watsonx(prompt: str) -> str | None:
 def _call_gemini_analysis(prompt: str) -> str | None:
     """Use Gemini as fallback for the full analysis."""
     api_key = os.environ.get("GEMINI_API_KEY")
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     if not api_key:
         return None
 
     try:
-        from google import genai
+        from google import genai  # type: ignore[import-untyped]
 
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
+        response = client.models.generate_content(model=model, contents=prompt)
         return response.text
     except Exception as exc:  # noqa: BLE001
-        print(f"[analyzer] Gemini analysis error: {exc}")
+        print(f"[analyzer] Gemini analysis error: {type(exc).__name__}: {exc}")
         return None
 
 
 def _call_gemini_citations(analysis_text: str) -> list[Citation]:
     """Call Gemini with Google Search grounding to find supporting citations."""
     api_key = os.environ.get("GEMINI_API_KEY")
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     if not api_key:
         return []
 
     try:
-        from google import genai
-        from google.genai import types
+        from google import genai  # type: ignore[import-untyped]
+        from google.genai import types  # type: ignore[import-untyped]
 
         client = genai.Client(api_key=api_key)
 
@@ -162,7 +182,7 @@ def _call_gemini_citations(analysis_text: str) -> list[Citation]:
         )
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=model,
             contents=citation_prompt,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
@@ -203,7 +223,8 @@ async def analyze(
 
     # Step 1 — primary model
     if use_watsonx:
-        raw_text = _call_watsonx(prompt)
+        # raw_text = _call_watsonx(prompt)
+        raw_text = _call_gemini_analysis(prompt)
 
     # Step 2 — fallback
     if raw_text is None:
