@@ -1,0 +1,9 @@
+fastapi[standard]
+uvicorn
+python-multipart
+pillow
+albumentations
+opencv-python-headless
+numpy
+ibm-watsonx-ai
+google-genai

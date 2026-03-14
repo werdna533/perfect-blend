@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+backend/venv/
+__pycache__/
+*.pyc
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Environment
+.env
+backend/.env
+frontend/.env
+
+# Dataset (large files)
+resized_dataset/
+balanced_dataset/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.sw?
+
+.claude/

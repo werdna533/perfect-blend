@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  /* PerfectBlend — bright smoothie-inspired palette */
+  --color-mango: #FFB020;
+  --color-berry: #E040A0;
+  --color-kiwi: #30C060;
+  --color-strawberry: #FF4040;
+  --color-blueberry: #4060FF;
+  --color-grape: #8040E0;
+  --color-peach: #FF8060;
+  --color-mint: #20D0A0;
+  --color-lemon: #F0E040;
+
+  --color-bg: #FAFAFA;
+  --color-surface: #FFFFFF;
+  --color-text: #1A1A2E;
+  --color-text-muted: #6B7280;
+  --color-border: #E5E7EB;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
