@@ -1,4 +1,4 @@
-"""AI-powered dataset analysis using watsonx.ai (primary) and Gemini (backup)."""
+"""AI-powered dataset analysis using RailTracks + Gemini (fallback)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,6 @@ import json
 import os
 import re
 from typing import Any
-
-import requests
 
 from models import AnalysisResponse, Citation, ClassAnalysis, ClassDistribution
 
@@ -19,9 +17,8 @@ if _ssl_cert and not os.path.exists(_ssl_cert):
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
-def _extract_json(text: str) -> dict[str, Any]:
+def _extract_json(text: str) -> Any:
     """Extract JSON from a response that may contain markdown code fences."""
-    # Try stripping ```json ... ``` fences first
     fenced = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
     payload = fenced.group(1).strip() if fenced else text.strip()
     return json.loads(payload)
@@ -44,13 +41,17 @@ example, if the classes represent species, consider natural species abundance; i
 represent medical conditions, consider disease prevalence; and so on.
 
 Guidelines:
-- Prefer UPSAMPLING minority classes over downsampling majority classes, unless the dataset
-  is very large (>10 000 images per class).
+- Use a COMBINATION of upsampling minority classes and downsampling majority classes where
+  practical. Do not upsample-only if it would more than double the total dataset size.
+- Prefer downsampling the majority when it has significantly more annotations than needed
+  for the task — removing redundant majority examples is often better than flooding with
+  synthetic minority examples.
 - Aim for a distribution that makes sense for the stated fine-tuning purpose, NOT
   necessarily a perfectly uniform distribution.
 - For each class, specify a concrete target annotation count, the strategy
   ("upsample", "downsample", or "keep"), and a short rationale.
 - Provide a brief (2-4 sentence) overall strategy blurb.
+- Use the search_recent_research tool to find relevant papers supporting your recommendations.
 
 Respond with ONLY a JSON object (no markdown fences) in this exact schema:
 {{
@@ -68,80 +69,77 @@ Respond with ONLY a JSON object (no markdown fences) in this exact schema:
 """
 
 
-# ── watsonx.ai ──────────────────────────────────────────────────────
+# ── RailTracks agent (primary) ───────────────────────────────────────
 
-def _call_watsonx(prompt: str) -> str | None:
-    """Call IBM watsonx.ai chat model over HTTP. Returns raw text or None on failure."""
-    api_key = os.environ.get("WATSONX_API_KEY")
-    project_id = os.environ.get("WATSONX_PROJECT_ID")
-    url = os.environ.get("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
-    model_id = os.environ.get("WATSONX_MODEL_ID", "meta-llama/llama-3-3-70b-instruct")
+def _build_railtracks_agent():
+    """Build a RailTracks agent with Gemini LLM + Gemini-grounded web search tool."""
+    import railtracks as rt  # type: ignore[import-untyped]
+    from google import genai  # type: ignore[import-untyped]
+    from google.genai import types  # type: ignore[import-untyped]
 
-    if not api_key or not project_id:
-        print("[analyzer] watsonx: missing WATSONX_API_KEY or WATSONX_PROJECT_ID")
-        return None
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+    @rt.function_node
+    def search_recent_research(query: str) -> str:
+        """Search for recent research papers and best practices on ML dataset balancing and class imbalance."""
+        try:
+            client = genai.Client(api_key=gemini_api_key)
+            response = client.models.generate_content(
+                model=gemini_model,
+                contents=f"Find recent authoritative research on: {query}. Summarize key findings relevant to ML dataset class imbalance.",
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
+            return response.text or "No results found."
+        except Exception as exc:
+            return f"Search unavailable: {exc}"
+
+    agent = rt.agent_node(
+        name="dataset_bias_analyzer",
+        tool_nodes=(search_recent_research,),
+        llm=rt.llm.GeminiLLM(
+            model_name=gemini_model,
+            api_key=gemini_api_key,
+            temperature=0.3,
+        ),
+        system_message=(
+            "You are an expert MLOps data-quality engineer specializing in computer vision datasets. "
+            "When asked to analyze class imbalance, use the search_recent_research tool to find "
+            "supporting evidence for your recommendations before giving your final answer."
+        ),
+        max_tool_calls=1,
+    )
+    return agent, rt
+
+
+async def _call_railtracks(prompt: str) -> tuple[str | None, list[Citation]]:
+    """Run the RailTracks agent. Returns (raw_text, citations)."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None, []
 
     try:
-        token_response = requests.post(
-            "https://iam.cloud.ibm.com/identity/token",
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data={
-                "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
-                "apikey": api_key,
-            },
-            timeout=30,
-        )
-        token_response.raise_for_status()
-        access_token = token_response.json()["access_token"]
-
-        # Use /text/chat so Llama's chat template is applied correctly.
-        # /text/generation with raw "input" does not apply the instruct template
-        # and causes truncated / malformed JSON responses.
-        generation_response = requests.post(
-            f"{url.rstrip('/')}/ml/v1/text/chat?version=2024-05-31",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-            json={
-                "model_id": model_id,
-                "project_id": project_id,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an expert MLOps data-quality engineer. "
-                            "You MUST respond with ONLY a valid JSON object — "
-                            "no markdown fences, no prose, no explanation outside the JSON."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                "parameters": {
-                    "max_new_tokens": 4096,
-                    "temperature": 0.3,
-                    "repetition_penalty": 1.05,
-                },
-            },
-            timeout=120,
-        )
-        generation_response.raise_for_status()
-        payload = generation_response.json()
-        choices = payload.get("choices", [])
-        if not choices:
-            print(f"[analyzer] watsonx: empty choices in response: {payload}")
-            return None
-        return choices[0].get("message", {}).get("content")
-    except Exception as exc:  # noqa: BLE001
-        print(f"[analyzer] watsonx error: {exc}")
-        return None
+        agent, rt = _build_railtracks_agent()
+        raw = await rt.call(agent, prompt)
+        text = str(raw) if raw else None
+        if not text:
+            return None, []
+        # RailTracks wraps responses in LLMResponse(...) — unwrap it
+        llm_match = re.match(r"^LLMResponse\((.*)\)$", text, re.DOTALL)
+        if llm_match:
+            text = llm_match.group(1).strip()
+        return text, []
+    except Exception as exc:
+        print(f"[analyzer] RailTracks error: {type(exc).__name__}: {exc}")
+        return None, []
 
 
-# ── Gemini ──────────────────────────────────────────────────────────
+# ── Gemini direct fallback ───────────────────────────────────────────
 
 def _call_gemini_analysis(prompt: str) -> str | None:
-    """Use Gemini as fallback for the full analysis."""
+    """Direct Gemini call as fallback."""
     api_key = os.environ.get("GEMINI_API_KEY")
     model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     if not api_key:
@@ -153,13 +151,13 @@ def _call_gemini_analysis(prompt: str) -> str | None:
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(model=model, contents=prompt)
         return response.text
-    except Exception as exc:  # noqa: BLE001
-        print(f"[analyzer] Gemini analysis error: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        print(f"[analyzer] Gemini fallback error: {type(exc).__name__}: {exc}")
         return None
 
 
 def _call_gemini_citations(analysis_text: str) -> list[Citation]:
-    """Call Gemini with Google Search grounding to find supporting citations."""
+    """Fetch citations via Gemini + Google Search grounding."""
     api_key = os.environ.get("GEMINI_API_KEY")
     model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     if not api_key:
@@ -201,7 +199,7 @@ def _call_gemini_citations(analysis_text: str) -> list[Citation]:
             for item in items
             if isinstance(item, dict) and item.get("text")
         ]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[analyzer] Gemini citations error: {exc}")
         return []
 
@@ -211,27 +209,22 @@ def _call_gemini_citations(analysis_text: str) -> list[Citation]:
 async def analyze(
     purpose: str,
     distribution: list[ClassDistribution],
-    use_watsonx: bool = True,
 ) -> AnalysisResponse:
     """Run AI-powered dataset analysis.
 
-    1. Try watsonx (if enabled), then enrich with Gemini citations.
-    2. If watsonx fails, fall back to Gemini for everything.
+    1. Try RailTracks agent (Gemini LLM + Gemini-grounded web search tool).
+    2. If that fails, fall back to direct Gemini call + Gemini citation search.
     """
     prompt = _build_prompt(purpose, distribution)
-    raw_text: str | None = None
 
-    # Step 1 — primary model
-    if use_watsonx:
-        # raw_text = _call_watsonx(prompt)
-        raw_text = _call_gemini_analysis(prompt)
+    # Step 1 — RailTracks agent
+    raw_text, citations = await _call_railtracks(prompt)
 
-    # Step 2 — fallback
+    # Step 2 — fallback to direct Gemini
     if raw_text is None:
         raw_text = _call_gemini_analysis(prompt)
 
     if raw_text is None:
-        # Complete failure — return a sensible default
         return AnalysisResponse(
             analysis="Unable to reach any AI provider. Please check your API keys.",
             classes=[
@@ -250,7 +243,7 @@ async def analyze(
     # Parse the JSON response
     try:
         parsed = _extract_json(raw_text)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError):
         return AnalysisResponse(
             analysis=raw_text[:500],
             classes=[
@@ -278,8 +271,9 @@ async def analyze(
         for c in parsed.get("classes", [])
     ]
 
-    # Step 3 — enrich with citations via Gemini + Google Search grounding
-    citations = _call_gemini_citations(analysis_text)
+    # Fetch citations (no sleep needed — agent + citation = 3 calls max, within free tier)
+    if not citations:
+        citations = _call_gemini_citations(analysis_text)
 
     return AnalysisResponse(
         analysis=analysis_text,

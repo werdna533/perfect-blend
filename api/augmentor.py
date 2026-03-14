@@ -26,7 +26,7 @@ def create_augmentation_pipeline() -> A.Compose:
             A.HueSaturationValue(
                 hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=20, p=0.5
             ),
-            A.GaussNoise(var_limit=(10, 50), p=0.3),
+            A.GaussNoise(std_range=(0.02, 0.08), p=0.3),
             A.Blur(blur_limit=3, p=0.2),
         ],
         bbox_params=A.BboxParams(

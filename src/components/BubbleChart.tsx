@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import type { BubbleRecord, CategoryInfo } from '../types';
 
-const CLASS_COLORS = [
+export const CLASS_COLORS = [
   '#FF4040', '#4060FF', '#30C060', '#FFB020', '#E040A0',
   '#8040E0', '#FF8060', '#20D0A0', '#F0E040', '#FF6B6B',
   '#5B8DEF', '#50D080', '#FFC840', '#F060B0', '#A060F0',
@@ -14,6 +14,9 @@ interface BubbleChartProps {
   data: BubbleRecord[];
   categories: CategoryInfo[];
   title: string;
+  showLegend?: boolean;
+  externalSelected?: string | null;
+  onExternalSelect?: (cls: string | null) => void;
 }
 
 // Mirrors the Observable demo node shape: pack leaf + simulation node datum
@@ -25,12 +28,17 @@ type SimNode = d3.SimulationNodeDatum & {
   data: PackDatum;
 };
 
-export default function BubbleChart({ data, categories, title }: BubbleChartProps) {
+export default function BubbleChart({ data, categories, title, showLegend = true, externalSelected, onExternalSelect }: BubbleChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  const [selectedClass, setSelectedClass] = useState<string | null>(null);
+  const [internalSelected, setInternalSelected] = useState<string | null>(null);
+  const selectedClass = externalSelected !== undefined ? externalSelected : internalSelected;
+  const setSelectedClass = (cls: string | null) => {
+    if (onExternalSelect) onExternalSelect(cls);
+    else setInternalSelected(cls);
+  };
   const [layoutMode, setLayoutMode] = useState<'blended' | 'clustered'>('clustered');
   const [containerWidth, setContainerWidth] = useState(600);
 
@@ -149,7 +157,7 @@ export default function BubbleChart({ data, categories, title }: BubbleChartProp
     // ── forceCluster: exact Observable centroid-pull algorithm ───────────────
 
     function makeForceCluster() {
-      const strength = 0.1;
+      const strength = 0.25;
       let simNodes: SimNode[];
 
       function centroid(group: SimNode[]) {
@@ -178,13 +186,14 @@ export default function BubbleChart({ data, categories, title }: BubbleChartProp
     // ── forceCollide: exact Observable quadtree rigid-collision algorithm ────
 
     function makeForceCollide() {
-      const rigidity = 0.4;   // fixed alpha for greater rigidity
-      const padding1  = 2;    // same-class separation
-      const padding2  = 6;    // cross-class separation
+      const rigidity   = 0.7;   // higher = resolves overlap faster per iteration
+      const iterations  = 3;    // run multiple passes per tick to settle quickly
+      const padding1   = 2;    // same-class separation
+      const padding2   = 6;    // cross-class separation
       let simNodes: SimNode[];
       let maxRadius = 0;
 
-      const force = () => {
+      const resolveOnce = () => {
         const quadtree = d3.quadtree(simNodes, d => d.x, d => d.y);
         for (const d of simNodes) {
           const r   = d.r + maxRadius;
@@ -216,6 +225,8 @@ export default function BubbleChart({ data, categories, title }: BubbleChartProp
         }
       };
 
+      const force = () => { for (let i = 0; i < iterations; i++) resolveOnce(); };
+
       (force as any).initialize = (n: SimNode[]) => {
         simNodes = n;
         maxRadius = (d3.max(n, d => d.r) ?? 0) + Math.max(padding1, padding2);
@@ -226,8 +237,10 @@ export default function BubbleChart({ data, categories, title }: BubbleChartProp
     // ── simulation (live — required for drag to work) ────────────────────────
 
     const simulation = d3.forceSimulation(nodes as d3.SimulationNodeDatum[])
-      .force('x', d3.forceX(chartWidth / 2).strength(0.01))
-      .force('y', d3.forceY(height / 2).strength(0.01))
+      .alphaDecay(0.028)
+      .velocityDecay(0.45)
+      .force('x', d3.forceX(chartWidth / 2).strength(0.04))
+      .force('y', d3.forceY(height / 2).strength(0.04))
       .force('cluster', layoutMode === 'clustered' ? makeForceCluster() as any : null)
       .force('collide', makeForceCollide() as any);
 
@@ -362,39 +375,41 @@ export default function BubbleChart({ data, categories, title }: BubbleChartProp
           />
         </div>
 
-        {/* Legend */}
-        <div className="w-44 shrink-0">
-          <h4 className="text-sm font-semibold text-text-muted mb-2">Classes</h4>
-          <div className="space-y-1 max-h-96 overflow-y-auto">
-            {classNames.map(name => (
+        {/* Legend — hidden when parent manages a shared legend */}
+        {showLegend && (
+          <div className="w-44 shrink-0">
+            <h4 className="text-sm font-semibold text-text-muted mb-2">Classes</h4>
+            <div className="space-y-1 max-h-96 overflow-y-auto">
+              {classNames.map(name => (
+                <button
+                  key={name}
+                  onClick={() => handleLegendClick(name)}
+                  className={`flex items-center gap-2 w-full text-left px-2 py-1 text-sm transition-colors
+                    ${selectedClass === name
+                      ? 'bg-berry/10 font-semibold text-text'
+                      : selectedClass
+                        ? 'text-text-muted opacity-50'
+                        : 'text-text hover:bg-border/30'
+                    }`}
+                >
+                  <span
+                    className="w-3 h-3 shrink-0"
+                    style={{ backgroundColor: colorMap.get(name) }}
+                  />
+                  <span className="truncate">{name}</span>
+                </button>
+              ))}
+            </div>
+            {selectedClass && (
               <button
-                key={name}
-                onClick={() => handleLegendClick(name)}
-                className={`flex items-center gap-2 w-full text-left px-2 py-1 text-sm transition-colors
-                  ${selectedClass === name
-                    ? 'bg-berry/10 font-semibold text-text'
-                    : selectedClass
-                      ? 'text-text-muted opacity-50'
-                      : 'text-text hover:bg-border/30'
-                  }`}
+                onClick={() => setSelectedClass(null)}
+                className="mt-2 text-xs text-berry hover:underline"
               >
-                <span
-                  className="w-3 h-3 shrink-0"
-                  style={{ backgroundColor: colorMap.get(name) }}
-                />
-                <span className="truncate">{name}</span>
+                Clear filter
               </button>
-            ))}
+            )}
           </div>
-          {selectedClass && (
-            <button
-              onClick={() => setSelectedClass(null)}
-              className="mt-2 text-xs text-berry hover:underline"
-            >
-              Clear filter
-            </button>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

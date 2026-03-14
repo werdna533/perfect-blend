@@ -8,7 +8,7 @@ import type {
 } from './types';
 import { useApi } from './hooks/useApi';
 import DatasetConnect from './components/DatasetConnect';
-import BubbleChart from './components/BubbleChart';
+import BubbleChart, { CLASS_COLORS } from './components/BubbleChart';
 import AnalysisPanel from './components/AnalysisPanel';
 import RebalanceControls from './components/RebalanceControls';
 import ProgressPanel from './components/ProgressPanel';
@@ -29,15 +29,22 @@ export default function App() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [targets, setTargets] = useState<RebalanceTarget[]>([]);
   const [resultParseData, setResultParseData] = useState<ParseResult | null>(null);
+  const [visitedSteps, setVisitedSteps] = useState<Set<AppStep>>(new Set(['connect']));
+  const [resultsSelected, setResultsSelected] = useState<string | null>(null);
 
   const stepIndex = STEPS.findIndex(s => s.key === step);
+
+  const goToStep = (s: AppStep) => {
+    setStep(s);
+    setVisitedSteps(prev => new Set([...prev, s]));
+  };
 
   const handleConnect = async (path: string) => {
     const meta = await api.connectDataset(path);
     setMetadata(meta);
     const parsed = await api.parseDataset('train');
     setParseResult(parsed);
-    setStep('visualize');
+    goToStep('visualize');
   };
 
   const handleAnalyze = async (purpose: string) => {
@@ -51,17 +58,17 @@ export default function App() {
         strategy: c.strategy,
       }))
     );
-    setStep('analyze');
+    goToStep('analyze');
   };
 
   const handleStartRebalance = () => {
-    setStep('rebalance');
+    goToStep('rebalance');
   };
 
   const handleRebalanceComplete = async () => {
     const result = await api.parseDataset('balanced');
     setResultParseData(result);
-    setStep('results');
+    goToStep('results');
   };
 
   return (
@@ -86,19 +93,27 @@ export default function App() {
       {/* Step Indicator */}
       <div className="border-b border-border bg-surface px-6 py-3">
         <div className="max-w-7xl mx-auto flex gap-1">
-          {STEPS.map((s, i) => (
-            <div
-              key={s.key}
-              className={`flex-1 px-4 py-2 text-sm font-medium text-center transition-colors
-                ${i <= stepIndex
-                  ? 'bg-berry text-white'
-                  : 'bg-border/50 text-text-muted'
-                }`}
-            >
-              <span className="mr-2">{i + 1}.</span>
-              {s.label}
-            </div>
-          ))}
+          {STEPS.map((s, i) => {
+            const visited = visitedSteps.has(s.key);
+            const active = s.key === step;
+            return (
+              <button
+                key={s.key}
+                onClick={() => visited && goToStep(s.key)}
+                disabled={!visited}
+                className={`flex-1 px-4 py-2 text-sm font-medium text-center transition-colors
+                  ${active
+                    ? 'bg-berry text-white'
+                    : visited
+                      ? 'bg-berry/40 text-white hover:bg-berry/60 cursor-pointer'
+                      : 'bg-border/50 text-text-muted cursor-not-allowed'
+                  }`}
+              >
+                <span className="mr-2">{i + 1}.</span>
+                {s.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -159,29 +174,73 @@ export default function App() {
           />
         )}
 
-        {step === 'results' && parseResult && resultParseData && metadata && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Before & After</h2>
-            <div className="grid grid-cols-2 gap-6">
-              <BubbleChart
-                data={parseResult.bubbles}
-                categories={metadata.categories}
-                title="Original"
-              />
-              <BubbleChart
-                data={resultParseData.bubbles}
-                categories={metadata.categories}
-                title="Balanced"
-              />
+        {step === 'results' && parseResult && resultParseData && metadata && (() => {
+          const presentClasses = new Set([
+            ...parseResult.bubbles.map(b => b.class_name),
+            ...resultParseData.bubbles.map(b => b.class_name),
+          ]);
+          const classNames = [
+            ...metadata.categories.map(c => c.name).filter(n => presentClasses.has(n)),
+            ...Array.from(presentClasses).filter(n => !metadata.categories.some(c => c.name === n)),
+          ];
+          const colorMap = new Map(classNames.map((n, i) => [n, CLASS_COLORS[i % CLASS_COLORS.length]]));
+          return (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold">Before & After</h2>
+              <div className="grid grid-cols-2 gap-6">
+                <BubbleChart
+                  data={parseResult.bubbles}
+                  categories={metadata.categories}
+                  title="Original"
+                  showLegend={false}
+                  externalSelected={resultsSelected}
+                  onExternalSelect={setResultsSelected}
+                />
+                <BubbleChart
+                  data={resultParseData.bubbles}
+                  categories={metadata.categories}
+                  title="Balanced"
+                  showLegend={false}
+                  externalSelected={resultsSelected}
+                  onExternalSelect={setResultsSelected}
+                />
+              </div>
+              {/* Shared legend */}
+              <div className="bg-surface border border-border p-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-text-muted mr-2">Classes:</span>
+                  {classNames.map(name => (
+                    <button
+                      key={name}
+                      onClick={() => setResultsSelected(prev => prev === name ? null : name)}
+                      className={`flex items-center gap-1.5 px-2 py-1 text-sm border transition-colors
+                        ${resultsSelected === name
+                          ? 'border-berry bg-berry/10 font-semibold text-text'
+                          : resultsSelected
+                            ? 'border-border text-text-muted opacity-50'
+                            : 'border-border text-text hover:bg-border/30'
+                        }`}
+                    >
+                      <span className="w-3 h-3 shrink-0 rounded-sm" style={{ backgroundColor: colorMap.get(name) }} />
+                      {name}
+                    </button>
+                  ))}
+                  {resultsSelected && (
+                    <button onClick={() => setResultsSelected(null)} className="text-xs text-berry hover:underline ml-2">
+                      Clear filter
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="bg-surface border border-border p-6 text-center">
+                <h3 className="text-lg font-bold text-kiwi mb-2">Blending Complete!</h3>
+                <p className="text-text-muted text-sm">
+                  Your balanced dataset has been exported. The original dataset is untouched.
+                </p>
+              </div>
             </div>
-            <div className="bg-surface border border-border p-6 text-center">
-              <h3 className="text-lg font-bold text-kiwi mb-2">Blending Complete!</h3>
-              <p className="text-text-muted text-sm">
-                Your balanced dataset has been exported. The original dataset is untouched.
-              </p>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </main>
     </div>
   );
@@ -209,12 +268,7 @@ function AnalyzeForm({ onSubmit, loading }: { onSubmit: (purpose: string) => voi
         disabled={loading || !purpose.trim()}
         className="px-6 py-3 bg-blueberry text-white font-medium text-sm hover:bg-blueberry/90 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <img src="/blender-gif.gif" alt="Loading" className="h-4 w-4 object-contain" />
-            Analyzing...
-          </span>
-        ) : 'Analyze with AI'}
+        {loading ? 'Analyzing...' : 'Analyze with AI'}
       </button>
     </form>
   );

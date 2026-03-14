@@ -42,54 +42,6 @@ export default function AnalysisPanel({ analysis }: AnalysisPanelProps) {
         </div>
       )}
 
-      {/* Class analysis table */}
-      <div>
-        <h4 className="text-sm font-semibold text-text-muted mb-3">Per-Class Breakdown</h4>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-2 px-3 text-text-muted font-medium">Class</th>
-                <th className="text-right py-2 px-3 text-text-muted font-medium">Current</th>
-                <th className="text-right py-2 px-3 text-text-muted font-medium">Target</th>
-                <th className="text-center py-2 px-3 text-text-muted font-medium">Strategy</th>
-                <th className="text-left py-2 px-3 text-text-muted font-medium">Rationale</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analysis.classes.map(cls => (
-                <tr key={cls.class_name} className="border-b border-border/50 hover:bg-bg/50">
-                  <td className="py-2 px-3 font-medium text-text">{cls.class_name}</td>
-                  <td className="py-2 px-3 text-right text-text tabular-nums">
-                    {cls.current_count.toLocaleString()}
-                  </td>
-                  <td className="py-2 px-3 text-right text-text tabular-nums">
-                    {cls.target_count.toLocaleString()}
-                  </td>
-                  <td className="py-2 px-3 text-center">
-                    <StrategyBadge strategy={cls.strategy} />
-                  </td>
-                  <td className="py-2 px-3 text-text-muted text-xs">{cls.rationale}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
-  );
-}
-
-function StrategyBadge({ strategy }: { strategy: 'upsample' | 'downsample' | 'keep' }) {
-  const styles: Record<string, string> = {
-    upsample: 'bg-kiwi/15 text-kiwi border-kiwi',
-    downsample: 'bg-strawberry/15 text-strawberry border-strawberry',
-    keep: 'bg-border/30 text-text-muted border-border',
-  };
-
-  return (
-    <span className={`inline-block px-2 py-0.5 text-xs font-medium border ${styles[strategy]}`}>
-      {strategy}
-    </span>
   );
 }

@@ -16,6 +16,12 @@ export default function RebalanceControls({
 }: RebalanceControlsProps) {
   const [confirmed, setConfirmed] = useState(false);
 
+  const rationaleByClass = useMemo(() => {
+    const map = new Map<string, string>();
+    classes.forEach(c => map.set(c.class_name, c.rationale));
+    return map;
+  }, [classes]);
+
   const currentByClass = useMemo(() => {
     const map = new Map<string, number>();
     classes.forEach(c => map.set(c.class_name, c.current_count));
@@ -43,109 +49,83 @@ export default function RebalanceControls({
 
   return (
     <div className="bg-surface border border-border p-6 space-y-6">
-      <h3 className="text-lg font-bold text-text">Rebalance Controls</h3>
-      <p className="text-sm text-text-muted">
-        Review and adjust the target counts for each class. The strategy badge updates automatically.
-      </p>
+      <div>
+        <h3 className="text-lg font-bold text-text">Per-Class Targets</h3>
+        <p className="text-sm text-text-muted mt-1">
+          Review the AI's rationale and adjust target counts as needed. Strategy updates automatically.
+        </p>
+      </div>
 
-      {/* Class rows */}
-      <div className="space-y-3">
-        <div className="grid grid-cols-[1fr_100px_120px_90px] gap-3 text-xs font-medium text-text-muted px-1">
-          <span>Class</span>
-          <span className="text-right">Current</span>
-          <span className="text-right">Target</span>
-          <span className="text-center">Strategy</span>
-        </div>
-
+      {/* Per-class cards */}
+      <div className="space-y-4">
         {targets.map(target => {
           const current = currentByClass.get(target.class_name) || 0;
+          const rationale = rationaleByClass.get(target.class_name) || '';
+          const currentPct = (current / maxCount) * 100;
+          const targetPct = (target.target_count / maxCount) * 100;
+          const barColor =
+            target.strategy === 'upsample'
+              ? 'bg-kiwi'
+              : target.strategy === 'downsample'
+                ? 'bg-strawberry'
+                : 'bg-text-muted';
+
           return (
-            <div
-              key={target.class_name}
-              className="grid grid-cols-[1fr_100px_120px_90px] gap-3 items-center border border-border/50 px-3 py-2"
-            >
-              <span className="text-sm font-medium text-text truncate">
-                {target.class_name}
-              </span>
-              <span className="text-sm text-text-muted text-right tabular-nums">
-                {current.toLocaleString()}
-              </span>
-              <input
-                type="number"
-                min={0}
-                value={target.target_count}
-                onChange={e => handleTargetChange(target.class_name, Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-full px-2 py-1 text-sm text-right tabular-nums border border-border bg-bg text-text focus:outline-none focus:border-kiwi"
-              />
-              <div className="text-center">
+            <div key={target.class_name} className="border border-border/60 p-4 space-y-3">
+              {/* Header row: class name + strategy badge */}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-text">{target.class_name}</span>
                 <StrategyBadge strategy={target.strategy} />
+              </div>
+
+              {/* Current count | Target input */}
+              <div className="flex items-center gap-6">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-text-muted">Current</span>
+                  <span className="text-lg font-bold tabular-nums text-text">
+                    {current.toLocaleString()}
+                  </span>
+                </div>
+                <div className="text-text-muted text-lg">→</div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-text-muted">Target</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={target.target_count}
+                    onChange={e =>
+                      handleTargetChange(target.class_name, Math.max(0, parseInt(e.target.value) || 0))
+                    }
+                    className="w-28 px-2 py-1 text-lg font-bold tabular-nums border border-border bg-bg text-text focus:outline-none focus:border-kiwi"
+                  />
+                </div>
+              </div>
+
+              {/* AI Rationale */}
+              {rationale && (
+                <p className="text-xs text-text-muted italic leading-relaxed">{rationale}</p>
+              )}
+
+              {/* Before / After bars */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-14 text-xs text-text-muted shrink-0">Before</span>
+                  <div className="flex-1 h-3 bg-bg">
+                    <div className="h-full bg-border transition-all" style={{ width: `${currentPct}%` }} />
+                  </div>
+                  <span className="text-xs text-text-muted tabular-nums w-12 text-right">{current}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-14 text-xs text-text-muted shrink-0">After</span>
+                  <div className="flex-1 h-3 bg-bg">
+                    <div className={`h-full transition-all ${barColor}`} style={{ width: `${targetPct}%` }} />
+                  </div>
+                  <span className="text-xs text-text tabular-nums w-12 text-right font-medium">{target.target_count}</span>
+                </div>
               </div>
             </div>
           );
         })}
-      </div>
-
-      {/* Before/After bar chart */}
-      <div>
-        <h4 className="text-sm font-semibold text-text-muted mb-3">Before / After Comparison</h4>
-        <div className="space-y-2">
-          {targets.map(target => {
-            const current = currentByClass.get(target.class_name) || 0;
-            const currentPct = (current / maxCount) * 100;
-            const targetPct = (target.target_count / maxCount) * 100;
-            return (
-              <div key={target.class_name} className="flex items-center gap-3">
-                <span className="w-28 text-xs text-text-muted truncate shrink-0">
-                  {target.class_name}
-                </span>
-                <div className="flex-1 space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-4 bg-bg">
-                      <div
-                        className="h-full bg-border transition-all"
-                        style={{ width: `${currentPct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-text-muted tabular-nums w-12 text-right">
-                      {current}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-4 bg-bg">
-                      <div
-                        className={`h-full transition-all ${
-                          target.strategy === 'upsample'
-                            ? 'bg-kiwi'
-                            : target.strategy === 'downsample'
-                              ? 'bg-strawberry'
-                              : 'bg-text-muted'
-                        }`}
-                        style={{ width: `${targetPct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-text tabular-nums w-12 text-right font-medium">
-                      {target.target_count}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex gap-4 mt-2 text-xs text-text-muted">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 bg-border" /> Current
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 bg-kiwi" /> Upsample
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 bg-strawberry" /> Downsample
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 bg-text-muted" /> Keep
-          </span>
-        </div>
       </div>
 
       {/* Confirmation and apply */}

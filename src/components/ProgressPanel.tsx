@@ -64,13 +64,13 @@ export default function ProgressPanel({
               <img
                 src="/blender-gif.gif"
                 alt="Blending in progress"
-                className="w-12 h-12 object-contain mx-auto mb-3"
+                className="w-72 max-w-full h-auto object-contain mx-auto mb-3"
               />
               <h2 className="text-2xl font-bold text-text mb-1">
                 Blending in progress...
               </h2>
               <p className="text-sm text-text-muted">
-                Your dataset is being rebalanced. This may take a moment.
+                Creating the ideal blend of data. This may take a moment.
               </p>
             </div>
 

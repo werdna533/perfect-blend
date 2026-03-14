@@ -43,14 +43,7 @@ export default function DatasetConnect({ onConnect, loading }: DatasetConnectPro
             disabled={loading || !path.trim()}
             className="w-full px-6 py-3 bg-berry text-white font-medium text-sm hover:bg-berry/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <img src="/blender-gif.gif" alt="Loading" className="h-4 w-4 object-contain" />
-                Loading...
-              </span>
-            ) : (
-              'Load Dataset'
-            )}
+            {loading ? 'Loading...' : 'Load Dataset'}
           </button>
         </form>
       </div>
