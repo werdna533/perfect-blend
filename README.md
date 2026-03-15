@@ -15,13 +15,13 @@ PerfectBlend inspects a COCO-format dataset, identifies class imbalances with wi
 ## Tech stack
 
 ```
-Frontend   React · TypeScript · Tailwind CSS · D3.js
-Backend    Python · FastAPI · RailTracks · Gemini API · Albumentations
+Frontend:   React · TypeScript · Tailwind CSS · D3.js
+Backend:    Python · FastAPI · RailTracks · Gemini API · Albumentations
 ```
 
 ## Setup
 
-**Backend** — run from the `api/` directory:
+**Backend**: run from the `api/` directory:
 
 ```bash
 cd api
@@ -32,7 +32,7 @@ cp .env          # then fill in your API keys
 uvicorn main:app --reload
 ```
 
-**Frontend** — run from the project root:
+**Frontend**: run from the project root:
 
 ```bash
 npm install
