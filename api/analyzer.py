@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -34,7 +35,7 @@ def _extract_grounding_citations(response: Any) -> list[Citation]:
         gm = getattr(candidates[0], "grounding_metadata", None)
         if not gm:
             return []
-        for chunk in getattr(gm, "grounding_chunks", []):
+        for chunk in getattr(gm, "grounding_chunks", [])[:5]:
             web = getattr(chunk, "web", None)
             if web:
                 uri = getattr(web, "uri", None)
@@ -231,17 +232,30 @@ async def analyze(
     """Run AI-powered dataset analysis.
 
     1. Try RailTracks agent (Gemini LLM + domain-aware web search tool).
-    2. If that fails, fall back to direct Gemini call.
-    3. Fetch citations from real grounding metadata — no hallucinated URLs.
+       Citations are fetched concurrently to save a full round-trip.
+    2. If RailTracks fails, fall back to direct Gemini call.
+    3. Citations come from real grounding metadata — no hallucinated URLs.
     """
     prompt = _build_prompt(purpose, distribution)
+    class_names = [d.class_name for d in distribution]
+
+    loop = asyncio.get_event_loop()
+
+    # Fire citations fetch in a thread concurrently with the RailTracks agent
+    # (RailTracks always returns [] citations, so this fetch always runs anyway)
+    citations_future = loop.run_in_executor(
+        None, _fetch_domain_citations, purpose, class_names
+    )
 
     # Step 1 — RailTracks agent
-    raw_text, citations = await _call_railtracks(purpose, prompt)
+    raw_text, rt_citations = await _call_railtracks(purpose, prompt)
 
     # Step 2 — fallback to direct Gemini
     if raw_text is None:
-        raw_text = _call_gemini_analysis(prompt)
+        raw_text = await loop.run_in_executor(None, _call_gemini_analysis, prompt)
+
+    # Collect citations (prefer any rt_citations, else wait for concurrent fetch)
+    citations = rt_citations or await citations_future
 
     if raw_text is None:
         return AnalysisResponse(
@@ -275,7 +289,7 @@ async def analyze(
                 )
                 for d in distribution
             ],
-            citations=[],
+            citations=citations,
         )
 
     analysis_text = parsed.get("analysis", "")
@@ -289,11 +303,6 @@ async def analyze(
         )
         for c in parsed.get("classes", [])
     ]
-
-    # Fetch real domain citations from grounding metadata (not hallucinated)
-    if not citations:
-        class_names = [d.class_name for d in distribution]
-        citations = _fetch_domain_citations(purpose, class_names)
 
     return AnalysisResponse(
         analysis=analysis_text,

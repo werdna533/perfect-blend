@@ -31,6 +31,8 @@ export default function App() {
   const [resultParseData, setResultParseData] = useState<ParseResult | null>(null);
   const [visitedSteps, setVisitedSteps] = useState<Set<AppStep>>(new Set(['connect']));
   const [resultsSelected, setResultsSelected] = useState<string | null>(null);
+  const [visualizeSelected, setVisualizeSelected] = useState<string | null>(null);
+  const [outputName, setOutputName] = useState('balanced_dataset');
 
   const stepIndex = STEPS.findIndex(s => s.key === step);
 
@@ -61,12 +63,18 @@ export default function App() {
     goToStep('analyze');
   };
 
-  const handleStartRebalance = () => {
+  const handleStartRebalance = (name: string) => {
+    setOutputName(name);
     goToStep('rebalance');
   };
 
   const handleRebalanceComplete = async () => {
-    const result = await api.parseDataset('balanced');
+    // Build the same output path ProgressPanel uses so the correct directory is parsed
+    const normalized = (metadata?.path ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+    const lastSlash = normalized.lastIndexOf('/');
+    const parent = lastSlash >= 0 ? normalized.slice(0, lastSlash) : '.';
+    const balancedPath = `${parent}/${outputName}`;
+    const result = await api.parseDataset('balanced', balancedPath);
     setResultParseData(result);
     goToStep('results');
   };
@@ -135,13 +143,49 @@ export default function App() {
           <DatasetConnect onConnect={handleConnect} loading={api.loading} />
         )}
 
-        {step === 'visualize' && parseResult && (
+        {step === 'visualize' && parseResult && metadata && (() => {
+          const presentClasses = new Set(parseResult.bubbles.map(b => b.class_name));
+          const vizClassNames = [...new Set([
+            ...metadata.categories.map(c => c.name).filter(n => presentClasses.has(n)),
+            ...Array.from(presentClasses).filter(n => !metadata.categories.some(c => c.name === n)),
+          ])];
+          const vizColorMap = new Map(vizClassNames.map((n, i) => [n, CLASS_COLORS[i % CLASS_COLORS.length]]));
+          return (
           <div className="space-y-6">
             <BubbleChart
               data={parseResult.bubbles}
-              categories={metadata?.categories || []}
+              categories={metadata.categories}
               title="Current Dataset Distribution"
+              showLegend={false}
+              externalSelected={visualizeSelected}
+              onExternalSelect={setVisualizeSelected}
             />
+            <div className="bg-surface border border-border p-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-text-muted mr-2">Classes:</span>
+                {vizClassNames.map(name => (
+                  <button
+                    key={name}
+                    onClick={() => setVisualizeSelected(prev => prev === name ? null : name)}
+                    className={`flex items-center gap-1.5 px-2 py-1 text-sm border transition-colors
+                      ${visualizeSelected === name
+                        ? 'border-berry bg-berry/10 font-semibold text-text'
+                        : visualizeSelected
+                          ? 'border-border text-text-muted opacity-50'
+                          : 'border-border text-text hover:bg-border/30'
+                      }`}
+                  >
+                    <span className="w-3 h-3 shrink-0 rounded-sm" style={{ backgroundColor: vizColorMap.get(name) }} />
+                    {name}
+                  </button>
+                ))}
+                {visualizeSelected && (
+                  <button onClick={() => setVisualizeSelected(null)} className="text-xs text-berry hover:underline ml-2">
+                    Clear filter
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="bg-surface border border-border p-6">
               <h3 className="text-lg font-bold mb-4">Analyze for Bias</h3>
               <p className="text-text-muted text-sm mb-4">
@@ -151,7 +195,8 @@ export default function App() {
               <AnalyzeForm onSubmit={handleAnalyze} loading={api.loading} />
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {step === 'analyze' && analysis && parseResult && (
           <div className="space-y-6">
@@ -162,6 +207,7 @@ export default function App() {
               onTargetsChange={setTargets}
               onApply={handleStartRebalance}
             />
+
           </div>
         )}
 
@@ -169,6 +215,7 @@ export default function App() {
           <ProgressPanel
             targets={targets}
             datasetPath={metadata.path}
+            outputName={outputName}
             onComplete={handleRebalanceComplete}
             api={api}
           />
@@ -179,14 +226,79 @@ export default function App() {
             ...parseResult.bubbles.map(b => b.class_name),
             ...resultParseData.bubbles.map(b => b.class_name),
           ]);
-          const classNames = [
+          const classNames = [...new Set([
             ...metadata.categories.map(c => c.name).filter(n => presentClasses.has(n)),
             ...Array.from(presentClasses).filter(n => !metadata.categories.some(c => c.name === n)),
-          ];
+          ])];
           const colorMap = new Map(classNames.map((n, i) => [n, CLASS_COLORS[i % CLASS_COLORS.length]]));
+          const beforeImages = new Set(parseResult.bubbles.map(b => b.image_id)).size;
+          const afterImages = new Set(resultParseData.bubbles.map(b => b.image_id)).size;
+          const beforeAnns = parseResult.distribution.reduce((s, d) => s + d.count, 0);
+          const afterAnns = resultParseData.distribution.reduce((s, d) => s + d.count, 0);
+          const annDelta = Math.round(((afterAnns - beforeAnns) / (beforeAnns || 1)) * 100);
+          const afterDistMap = new Map(resultParseData.distribution.map(d => [d.class_name, d.count]));
           return (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold">Before & After</h2>
+
+              {/* Stats summary */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface border border-border p-4">
+                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Before</p>
+                  <p className="text-2xl font-bold text-text">{beforeImages.toLocaleString()} <span className="text-sm font-normal text-text-muted">images</span></p>
+                  <p className="text-sm text-text-muted">{beforeAnns.toLocaleString()} annotations</p>
+                </div>
+                <div className="bg-surface border border-border p-4">
+                  <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">After</p>
+                  <p className="text-2xl font-bold text-text">{afterImages.toLocaleString()} <span className="text-sm font-normal text-text-muted">images</span></p>
+                  <p className="text-sm text-text-muted">
+                    {afterAnns.toLocaleString()} annotations
+                    <span className={`ml-2 font-semibold ${annDelta < 0 ? 'text-strawberry' : annDelta > 0 ? 'text-kiwi' : 'text-text-muted'}`}>
+                      {annDelta > 0 ? '+' : ''}{annDelta}%
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Per-class table */}
+              <div className="bg-surface border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-bg">
+                      <th className="text-left px-4 py-2 font-semibold text-text-muted">Class</th>
+                      <th className="text-right px-4 py-2 font-semibold text-text-muted">Before</th>
+                      <th className="text-right px-4 py-2 font-semibold text-text-muted">After</th>
+                      <th className="text-right px-4 py-2 font-semibold text-text-muted">Change</th>
+                      <th className="text-center px-4 py-2 font-semibold text-text-muted">Strategy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parseResult.distribution.map(d => {
+                      const after = afterDistMap.get(d.class_name) ?? 0;
+                      const pct = d.count > 0 ? Math.round(((after - d.count) / d.count) * 100) : 0;
+                      const strategy = analysis?.classes.find(c => c.class_name === d.class_name)?.strategy ?? 'keep';
+                      const strategyStyle =
+                        strategy === 'upsample' ? 'bg-kiwi/15 text-kiwi border border-kiwi/30' :
+                        strategy === 'downsample' ? 'bg-strawberry/15 text-strawberry border border-strawberry/30' :
+                        'bg-border/50 text-text-muted border border-border';
+                      return (
+                        <tr key={d.class_name} className="border-b border-border last:border-0">
+                          <td className="px-4 py-2 font-medium text-text">{d.class_name}</td>
+                          <td className="px-4 py-2 text-right text-text-muted">{d.count.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right font-medium text-text">{after.toLocaleString()}</td>
+                          <td className={`px-4 py-2 text-right font-semibold ${pct < 0 ? 'text-strawberry' : pct > 0 ? 'text-kiwi' : 'text-text-muted'}`}>
+                            {pct > 0 ? '+' : ''}{pct}%
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <span className={`text-xs font-medium px-2 py-0.5 ${strategyStyle}`}>{strategy}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
               <div className="grid grid-cols-2 gap-6">
                 <BubbleChart
                   data={parseResult.bubbles}

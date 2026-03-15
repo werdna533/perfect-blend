@@ -1,0 +1,327 @@
+{
+  "info": {
+    "year": "2024",
+    "version": "1",
+    "description": "Exported from roboflow.com",
+    "contributor": "",
+    "url": "https://public.roboflow.com/object-detection/undefined",
+    "date_created": "2024-05-08T04:07:44+00:00"
+  },
+  "licenses": [
+    {
+      "id": 1,
+      "url": "https://creativecommons.org/licenses/by/4.0/",
+      "name": "CC BY 4.0"
+    }
+  ],
+  "categories": [
+    {
+      "id": 0,
+      "name": "Vascular-lesions",
+      "supercategory": "none"
+    },
+    {
+      "id": 1,
+      "name": "Actinic Keratoses",
+      "supercategory": "Vascular-lesions"
+    },
+    {
+      "id": 2,
+      "name": "Basal Cell Carcinoma",
+      "supercategory": "Vascular-lesions"
+    },
+    {
+      "id": 3,
+      "name": "Benign Keratosis Lesions",
+      "supercategory": "Vascular-lesions"
+    },
+    {
+      "id": 4,
+      "name": "Dermatofibrom",
+      "supercategory": "Vascular-lesions"
+    },
+    {
+      "id": 5,
+      "name": "Melanocytic Nevi",
+      "supercategory": "Vascular-lesions"
+    },
+    {
+      "id": 6,
+      "name": "Melanoma",
+      "supercategory": "Vascular-lesions"
+    },
+    {
+      "id": 7,
+      "name": "Vascular-lesions",
+      "supercategory": "Vascular-lesions"
+    }
+  ],
+  "images": [
+    {
+      "id": 1,
+      "license": 1,
+      "file_name": "Actinic-keratoses-6-_jpg.rf.1216ccee1ff5089d12ff3db46869f313.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 2,
+      "license": 1,
+      "file_name": "Melanocytic-Nevi-6-_jpg.rf.8149ff7c3f61cfc7980550b015c65f27.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 3,
+      "license": 1,
+      "file_name": "Actinic-keratoses-2-_jpg.rf.08aebfef515c90eb7a46da020c75e2c1.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 4,
+      "license": 1,
+      "file_name": "Melanocytic-Nevi-10-_jpg.rf.a8250a81f9e916f962f27ad47dc4b9e0.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 5,
+      "license": 1,
+      "file_name": "Basal-cell-carcinoma-16-_jpg.rf.7ea5442394054a331adc94953769f071.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 6,
+      "license": 1,
+      "file_name": "Dermatofibrom-14-_jpg.rf.ec4b4fbad3febbf04ad5da62288e5091.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 7,
+      "license": 1,
+      "file_name": "Dermatofibrom-1-_jpg.rf.ddb3d295f2258dec6504ecacbc8d4fd9.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 8,
+      "license": 1,
+      "file_name": "Basal-cell-carcinoma-11-_jpg.rf.dd38fc625845bf9c38bf07a3acae9d10.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 9,
+      "license": 1,
+      "file_name": "Benign-keratosis-lesions-13-_jpg.rf.b6600196484af0ff5c07c737cf3f0962.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 10,
+      "license": 1,
+      "file_name": "Benign-keratosis-lesions-5-_jpg.rf.220d01ac5d30d04ba0697f81eb2db2ca.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 11,
+      "license": 1,
+      "file_name": "Melanoma-3-_jpg.rf.bbd55b0e300097d3993c35f67145f20f.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    },
+    {
+      "id": 12,
+      "license": 1,
+      "file_name": "Melanoma-7-_jpg.rf.fa5b59bb5c9fed26ff74826c12e206b0.jpg",
+      "height": 640,
+      "width": 640,
+      "date_captured": "2024-05-08T04:07:44+00:00"
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [
+        139,
+        110,
+        336,
+        409
+      ],
+      "area": 137424,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 2,
+      "image_id": 2,
+      "category_id": 5,
+      "bbox": [
+        212,
+        182,
+        216.5,
+        233.5
+      ],
+      "area": 50552.75,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 3,
+      "image_id": 3,
+      "category_id": 1,
+      "bbox": [
+        61,
+        65,
+        509,
+        541.5
+      ],
+      "area": 275623.5,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 4,
+      "image_id": 4,
+      "category_id": 5,
+      "bbox": [
+        213,
+        163,
+        233,
+        300.5
+      ],
+      "area": 70016.5,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 5,
+      "image_id": 5,
+      "category_id": 2,
+      "bbox": [
+        312,
+        167,
+        194.5,
+        371.5
+      ],
+      "area": 72256.75,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 6,
+      "image_id": 6,
+      "category_id": 4,
+      "bbox": [
+        109,
+        114,
+        281.5,
+        442.5
+      ],
+      "area": 124563.75,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 7,
+      "image_id": 7,
+      "category_id": 4,
+      "bbox": [
+        183,
+        164,
+        276,
+        302
+      ],
+      "area": 83352,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 8,
+      "image_id": 8,
+      "category_id": 2,
+      "bbox": [
+        203,
+        205,
+        304,
+        330.5
+      ],
+      "area": 100472,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 9,
+      "image_id": 9,
+      "category_id": 3,
+      "bbox": [
+        95,
+        55,
+        344,
+        418
+      ],
+      "area": 143792,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 10,
+      "image_id": 10,
+      "category_id": 3,
+      "bbox": [
+        165,
+        219,
+        333.5,
+        218.5
+      ],
+      "area": 72869.75,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 11,
+      "image_id": 11,
+      "category_id": 6,
+      "bbox": [
+        140,
+        167,
+        337.5,
+        408
+      ],
+      "area": 137700,
+      "segmentation": [],
+      "iscrowd": 0
+    },
+    {
+      "id": 12,
+      "image_id": 12,
+      "category_id": 6,
+      "bbox": [
+        141,
+        105,
+        367,
+        434
+      ],
+      "area": 159278,
+      "segmentation": [],
+      "iscrowd": 0
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import type { RebalanceTarget, RebalanceProgress } from '../types';
 interface ProgressPanelProps {
   targets: RebalanceTarget[];
   datasetPath: string;
+  outputName: string;
   onComplete: () => void;
   api: {
     rebalanceDataset: (
@@ -19,6 +20,7 @@ interface ProgressPanelProps {
 export default function ProgressPanel({
   targets,
   datasetPath,
+  outputName,
   onComplete,
   api,
 }: ProgressPanelProps) {
@@ -31,7 +33,7 @@ export default function ProgressPanel({
     const normalized = datasetPath.replace(/\\/g, '/').replace(/\/+$/, '');
     const lastSlash = normalized.lastIndexOf('/');
     const parent = lastSlash >= 0 ? normalized.slice(0, lastSlash) : '.';
-    return `${parent}/balanced_dataset`;
+    return `${parent}/${outputName}`;
   })();
 
   useEffect(() => {

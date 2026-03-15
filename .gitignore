@@ -14,9 +14,16 @@ dist-ssr/
 .env
 api/.env
 
+
+api/.railtracks/
+
+
 # Dataset (large files)
 resized_dataset/
 balanced_dataset/
+balanced_dataset2/
+balanced_marine_dataset/
+balanced_skin_dataset/
 
 # Logs
 logs/

@@ -113,16 +113,21 @@ async def connect_dataset(req: ConnectRequest):
 
 
 @app.get("/api/dataset/parse", response_model=ParseResponse)
-async def parse_dataset(split: str = Query(..., description="Split name (train, test, valid, or balanced)")):
+async def parse_dataset(
+    split: str = Query(..., description="Split name (train, test, valid, or balanced)"),
+    output_dir: str | None = Query(None, description="Absolute path to balanced output directory"),
+):
     if _dataset_path is None:
         raise HTTPException(status_code=400, detail="No dataset connected. Call /api/dataset/connect first.")
 
     if split == "balanced":
-        # Look for balanced_dataset directory next to the dataset
-        balanced_dir = _dataset_path.parent / "balanced_dataset"
-        if not balanced_dir.exists():
-            # Also try inside the dataset path
-            balanced_dir = _dataset_path / "balanced_dataset"
+        if output_dir:
+            balanced_dir = Path(output_dir)
+        else:
+            # Legacy fallback: look for balanced_dataset sibling
+            balanced_dir = _dataset_path.parent / "balanced_dataset"
+            if not balanced_dir.exists():
+                balanced_dir = _dataset_path / "balanced_dataset"
         ann_file = balanced_dir / "_annotations.coco.json"
     else:
         ann_file = _dataset_path / split / "_annotations.coco.json"

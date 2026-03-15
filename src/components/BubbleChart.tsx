@@ -43,11 +43,12 @@ export default function BubbleChart({ data, categories, title, showLegend = true
   const [containerWidth, setContainerWidth] = useState(600);
 
   // Prefer the declared category order, then append any classes only present in the data.
+  // Wrap in Set to guard against duplicate entries in categories.
   const presentClasses = new Set(data.map(d => d.class_name));
-  const classNames = [
+  const classNames = [...new Set([
     ...categories.map(category => category.name).filter(name => presentClasses.has(name)),
     ...Array.from(presentClasses).filter(name => !categories.some(category => category.name === name)),
-  ];
+  ])];
   const colorMap = new Map(classNames.map((name, i) => [name, CLASS_COLORS[i % CLASS_COLORS.length]]));
 
   // Observe container width
@@ -134,9 +135,11 @@ export default function BubbleChart({ data, categories, title, showLegend = true
       : { children: filteredData as unknown as PackDatum[] };
 
     const maxCount = d3.max(filteredData, d => d.count) || 1;
+    const n = filteredData.length;
+    const maxRadiusFactor = n < 100 ? 0.13 : n < 250 ? 0.10 : n < 500 ? 0.07 : 0.055;
     const radiusScale = d3.scaleSqrt()
       .domain([1, maxCount])
-      .range([4, Math.max(8, Math.min(chartWidth, height) * 0.055)]);
+      .range([4, Math.max(8, Math.min(chartWidth, height) * maxRadiusFactor)]);
 
     const packRoot = d3
       .pack<PackDatum>()

@@ -5,7 +5,7 @@ interface RebalanceControlsProps {
   classes: ClassAnalysis[];
   targets: RebalanceTarget[];
   onTargetsChange: (targets: RebalanceTarget[]) => void;
-  onApply: () => void;
+  onApply: (outputName: string) => void;
 }
 
 export default function RebalanceControls({
@@ -15,6 +15,7 @@ export default function RebalanceControls({
   onApply,
 }: RebalanceControlsProps) {
   const [confirmed, setConfirmed] = useState(false);
+  const [outputName, setOutputName] = useState('balanced_dataset');
 
   const rationaleByClass = useMemo(() => {
     const map = new Map<string, string>();
@@ -78,7 +79,7 @@ export default function RebalanceControls({
                 <StrategyBadge strategy={target.strategy} />
               </div>
 
-              {/* Current count | Target input */}
+              {/* Current count | Target input | % change */}
               <div className="flex items-center gap-6">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs text-text-muted">Current</span>
@@ -99,6 +100,15 @@ export default function RebalanceControls({
                     className="w-28 px-2 py-1 text-lg font-bold tabular-nums border border-border bg-bg text-text focus:outline-none focus:border-kiwi"
                   />
                 </div>
+                {current > 0 && target.target_count !== current && (() => {
+                  const pct = Math.round(((target.target_count - current) / current) * 100);
+                  const color = pct > 0 ? 'text-kiwi' : 'text-strawberry';
+                  return (
+                    <span className={`text-sm font-semibold tabular-nums ${color}`}>
+                      {pct > 0 ? '+' : ''}{pct}%
+                    </span>
+                  );
+                })()}
               </div>
 
               {/* AI Rationale */}
@@ -130,6 +140,20 @@ export default function RebalanceControls({
 
       {/* Confirmation and apply */}
       <div className="border-t border-border pt-4 space-y-3">
+        <div>
+          <label htmlFor="output-name" className="block text-sm font-medium text-text mb-1">
+            Output Dataset Name
+          </label>
+          <input
+            id="output-name"
+            type="text"
+            value={outputName}
+            onChange={e => setOutputName(e.target.value.replace(/[^\w\-]/g, '_'))}
+            className="w-64 px-3 py-2 border border-border bg-bg text-text text-sm font-mono focus:outline-none focus:border-kiwi"
+          />
+          <p className="text-xs text-text-muted mt-1">Saved as a sibling folder next to your dataset.</p>
+        </div>
+
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -143,8 +167,8 @@ export default function RebalanceControls({
         </label>
 
         <button
-          onClick={onApply}
-          disabled={!confirmed}
+          onClick={() => onApply(outputName.trim() || 'balanced_dataset')}
+          disabled={!confirmed || !outputName.trim()}
           className="px-6 py-3 bg-berry text-white font-medium text-sm hover:bg-berry/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Start Blending

@@ -113,13 +113,17 @@ def augment_image(
     h, w = image.shape[:2]
 
     # Prepare masks, bboxes, category_ids
+    # Track which annotations have segmentation polygons vs bbox-only
+    has_segmentation: list[bool] = []
     masks: list[np.ndarray] = []
     bboxes: list[list[float]] = []
     category_ids: list[int] = []
 
     for ann in annotations:
         seg = ann.get("segmentation", [])
-        mask = _segmentation_to_mask(seg, h, w) if seg else np.zeros((h, w), dtype=np.uint8)
+        has_seg = bool(seg)
+        has_segmentation.append(has_seg)
+        mask = _segmentation_to_mask(seg, h, w) if has_seg else np.zeros((h, w), dtype=np.uint8)
         masks.append(mask)
 
         bbox = ann.get("bbox", [0, 0, 0, 0])
@@ -151,14 +155,26 @@ def augment_image(
     out_path = output_dir / out_name
     cv2.imwrite(str(out_path), cv2.cvtColor(aug_image, cv2.COLOR_RGB2BGR))
 
-    # Build new annotations
+    # Build new annotations.
+    # For annotations with segmentation: derive bbox/seg from the transformed mask.
+    # For bbox-only annotations: use the transformed bbox directly (mask is zeros).
     new_annotations: list[dict[str, Any]] = []
-    for mask, bbox, cat_id in zip(aug_masks, aug_bboxes, aug_cat_ids):
-        seg = _mask_to_segmentation(mask)
-        if not seg:
-            continue  # annotation vanished after transform
-        new_bbox = _mask_to_bbox(mask)
-        area = float(mask.sum())
+    for mask, bbox, cat_id, had_seg in zip(aug_masks, aug_bboxes, aug_cat_ids, has_segmentation):
+        if had_seg:
+            seg = _mask_to_segmentation(mask)
+            if not seg:
+                continue  # annotation vanished after transform
+            new_bbox = _mask_to_bbox(mask)
+            area = float(mask.sum())
+        else:
+            # bbox-only annotation — albumentations already transformed the bbox
+            x, y, bw, bh = bbox
+            if bw <= 0 or bh <= 0:
+                continue  # degenerate bbox
+            seg = []
+            new_bbox = [x, y, bw, bh]
+            area = bw * bh
+
         new_annotations.append(
             {
                 "segmentation": seg,

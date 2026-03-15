@@ -38,11 +38,13 @@ export function useApi() {
     }
   }, []);
 
-  const parseDataset = useCallback(async (split: string): Promise<ParseResult> => {
+  const parseDataset = useCallback(async (split: string, outputPath?: string): Promise<ParseResult> => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchJson<ParseResult>(`${API}/dataset/parse?split=${split}`);
+      const params = new URLSearchParams({ split });
+      if (outputPath) params.set('output_dir', outputPath);
+      const result = await fetchJson<ParseResult>(`${API}/dataset/parse?${params}`);
       return result;
     } catch (e: any) {
       setError(e.message);
