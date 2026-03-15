@@ -24,6 +24,28 @@ def _extract_json(text: str) -> Any:
     return json.loads(payload)
 
 
+def _extract_grounding_citations(response: Any) -> list[Citation]:
+    """Extract real source URLs from Gemini grounding metadata — no hallucinations."""
+    citations: list[Citation] = []
+    try:
+        candidates = getattr(response, "candidates", [])
+        if not candidates:
+            return []
+        gm = getattr(candidates[0], "grounding_metadata", None)
+        if not gm:
+            return []
+        for chunk in getattr(gm, "grounding_chunks", []):
+            web = getattr(chunk, "web", None)
+            if web:
+                uri = getattr(web, "uri", None)
+                title = getattr(web, "title", None) or uri
+                if uri:
+                    citations.append(Citation(text=title, url=uri))
+    except Exception:
+        pass
+    return citations
+
+
 def _build_prompt(purpose: str, distribution: list[ClassDistribution]) -> str:
     dist_table = "\n".join(
         f"  - {d.class_name} (id={d.class_id}): {d.count} annotations"
@@ -51,7 +73,8 @@ Guidelines:
 - For each class, specify a concrete target annotation count, the strategy
   ("upsample", "downsample", or "keep"), and a short rationale.
 - Provide a brief (2-4 sentence) overall strategy blurb.
-- Use the search_recent_research tool to find relevant papers supporting your recommendations.
+- Use the search_domain_context tool to look up real-world information about the domain
+  described in the purpose before giving your recommendations.
 
 Respond with ONLY a JSON object (no markdown fences) in this exact schema:
 {{
@@ -71,23 +94,27 @@ Respond with ONLY a JSON object (no markdown fences) in this exact schema:
 
 # ── RailTracks agent (primary) ───────────────────────────────────────
 
-def _build_railtracks_agent():
-    """Build a RailTracks agent with Gemini LLM + Gemini-grounded web search tool."""
+def _build_railtracks_agent(purpose: str):
+    """Build a RailTracks agent with a domain-aware search tool."""
     import railtracks as rt  # type: ignore[import-untyped]
     from google import genai  # type: ignore[import-untyped]
     from google.genai import types  # type: ignore[import-untyped]
 
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
-    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
     @rt.function_node
-    def search_recent_research(query: str) -> str:
-        """Search for recent research papers and best practices on ML dataset balancing and class imbalance."""
+    def search_domain_context(query: str) -> str:
+        """Search for real-world domain context relevant to the dataset's subject matter
+        (e.g. species abundance, habitat characteristics, medical prevalence rates)
+        to inform class balance recommendations."""
         try:
             client = genai.Client(api_key=gemini_api_key)
+            # Anchor the search to the user's domain, not just ML techniques
+            domain_query = f"{query} in the context of: {purpose}"
             response = client.models.generate_content(
                 model=gemini_model,
-                contents=f"Find recent authoritative research on: {query}. Summarize key findings relevant to ML dataset class imbalance.",
+                contents=domain_query,
                 config=types.GenerateContentConfig(
                     tools=[types.Tool(google_search=types.GoogleSearch())],
                 ),
@@ -98,7 +125,7 @@ def _build_railtracks_agent():
 
     agent = rt.agent_node(
         name="dataset_bias_analyzer",
-        tool_nodes=(search_recent_research,),
+        tool_nodes=(search_domain_context,),
         llm=rt.llm.GeminiLLM(
             model_name=gemini_model,
             api_key=gemini_api_key,
@@ -106,22 +133,24 @@ def _build_railtracks_agent():
         ),
         system_message=(
             "You are an expert MLOps data-quality engineer specializing in computer vision datasets. "
-            "When asked to analyze class imbalance, use the search_recent_research tool to find "
-            "supporting evidence for your recommendations before giving your final answer."
+            f"The dataset is for: {purpose}. "
+            "Before recommending class balance targets, use the search_domain_context tool to look up "
+            "real-world information about the subject matter — such as species abundance, habitat data, "
+            "or domain prevalence rates — so your recommendations reflect reality, not just ML heuristics."
         ),
         max_tool_calls=1,
     )
     return agent, rt
 
 
-async def _call_railtracks(prompt: str) -> tuple[str | None, list[Citation]]:
+async def _call_railtracks(purpose: str, prompt: str) -> tuple[str | None, list[Citation]]:
     """Run the RailTracks agent. Returns (raw_text, citations)."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return None, []
 
     try:
-        agent, rt = _build_railtracks_agent()
+        agent, rt = _build_railtracks_agent(purpose)
         raw = await rt.call(agent, prompt)
         text = str(raw) if raw else None
         if not text:
@@ -141,7 +170,7 @@ async def _call_railtracks(prompt: str) -> tuple[str | None, list[Citation]]:
 def _call_gemini_analysis(prompt: str) -> str | None:
     """Direct Gemini call as fallback."""
     api_key = os.environ.get("GEMINI_API_KEY")
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
     if not api_key:
         return None
 
@@ -156,10 +185,10 @@ def _call_gemini_analysis(prompt: str) -> str | None:
         return None
 
 
-def _call_gemini_citations(analysis_text: str) -> list[Citation]:
-    """Fetch citations via Gemini + Google Search grounding."""
+def _fetch_domain_citations(purpose: str, class_names: list[str]) -> list[Citation]:
+    """Search for real domain sources using grounding metadata — no hallucinated URLs."""
     api_key = os.environ.get("GEMINI_API_KEY")
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
     if not api_key:
         return []
 
@@ -169,38 +198,27 @@ def _call_gemini_citations(analysis_text: str) -> list[Citation]:
 
         client = genai.Client(api_key=api_key)
 
-        citation_prompt = (
-            f"The following is an AI-generated analysis of a computer-vision dataset's "
-            f"class distribution:\n\n{analysis_text}\n\n"
-            f"Find 2-4 real, authoritative sources (research papers, official docs, blog "
-            f"posts) that support the reasoning above. For each, give a one-sentence "
-            f"summary and the URL.\n\n"
-            f"Respond with ONLY a JSON array:\n"
-            f'[{{"text": "<summary>", "url": "<url>"}}, ...]'
+        # Search for real domain context, not fabricated ML paper citations
+        subjects = ", ".join(class_names[:4])
+        query = (
+            f"What is the natural abundance, distribution, and relative prevalence of "
+            f"{subjects} relevant to: {purpose}? "
+            f"Provide factual ecological or domain data."
         )
 
         response = client.models.generate_content(
             model=model,
-            contents=citation_prompt,
+            contents=query,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
             ),
         )
 
-        raw = response.text
-        items = _extract_json(raw) if raw else []
-        if isinstance(items, dict):
-            items = items.get("citations", [])
-        if not isinstance(items, list):
-            return []
+        # Extract real URLs from grounding metadata instead of asking AI to generate them
+        return _extract_grounding_citations(response)
 
-        return [
-            Citation(text=item.get("text", ""), url=item.get("url"))
-            for item in items
-            if isinstance(item, dict) and item.get("text")
-        ]
     except Exception as exc:
-        print(f"[analyzer] Gemini citations error: {exc}")
+        print(f"[analyzer] Domain citations error: {exc}")
         return []
 
 
@@ -212,13 +230,14 @@ async def analyze(
 ) -> AnalysisResponse:
     """Run AI-powered dataset analysis.
 
-    1. Try RailTracks agent (Gemini LLM + Gemini-grounded web search tool).
-    2. If that fails, fall back to direct Gemini call + Gemini citation search.
+    1. Try RailTracks agent (Gemini LLM + domain-aware web search tool).
+    2. If that fails, fall back to direct Gemini call.
+    3. Fetch citations from real grounding metadata — no hallucinated URLs.
     """
     prompt = _build_prompt(purpose, distribution)
 
     # Step 1 — RailTracks agent
-    raw_text, citations = await _call_railtracks(prompt)
+    raw_text, citations = await _call_railtracks(purpose, prompt)
 
     # Step 2 — fallback to direct Gemini
     if raw_text is None:
@@ -271,9 +290,10 @@ async def analyze(
         for c in parsed.get("classes", [])
     ]
 
-    # Fetch citations (no sleep needed — agent + citation = 3 calls max, within free tier)
+    # Fetch real domain citations from grounding metadata (not hallucinated)
     if not citations:
-        citations = _call_gemini_citations(analysis_text)
+        class_names = [d.class_name for d in distribution]
+        citations = _fetch_domain_citations(purpose, class_names)
 
     return AnalysisResponse(
         analysis=analysis_text,

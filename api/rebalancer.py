@@ -55,6 +55,9 @@ async def rebalance(
     upsample_ids = {cid for cid, t in target_map.items() if t.strategy == "upsample"}
     downsample_ids = {cid for cid, t in target_map.items() if t.strategy == "downsample"}
 
+    # Snapshot of original counts for accurate progress messages (before any mutations)
+    original_counts = _class_counts(anns_by_image)
+
     # Track which images are retained (start with all)
     retained_image_ids: set[int] = set(images_by_id.keys())
 
@@ -112,14 +115,17 @@ async def rebalance(
                 continue
 
             await progress_callback(
-                f"Downsampling {categories[cid]}: {current} -> {t.target_count}"
+                f"Downsampling {categories[cid]}: {original_counts.get(cid, 0)} -> {t.target_count}"
             )
 
             # Score retained images that contain this class
+            # Hard skip: never remove an image that contains any minority class annotation
             scored: list[tuple[int, float]] = []
             for img_id in list(retained_image_ids):
                 img_anns = anns_by_image.get(img_id, [])
                 if not img_anns:
+                    continue
+                if any(a["category_id"] in upsample_ids for a in img_anns):
                     continue
                 total = len(img_anns)
                 target_count_in_img = sum(
@@ -128,11 +134,6 @@ async def rebalance(
                 if target_count_in_img == 0:
                     continue
                 removal_score = target_count_in_img / total
-                # Penalise images containing rare classes (those being upsampled)
-                rare_in_img = sum(
-                    1 for a in img_anns if a["category_id"] in upsample_ids
-                )
-                removal_score *= 1 - (rare_in_img / total)
                 scored.append((img_id, removal_score))
 
             scored.sort(key=lambda x: x[1], reverse=True)
@@ -162,7 +163,7 @@ async def rebalance(
                 continue
 
             await progress_callback(
-                f"Upsampling {categories[cid]}: {current} -> {t.target_count}"
+                f"Upsampling {categories[cid]}: {original_counts.get(cid, 0)} -> {t.target_count}"
             )
 
             # Score ORIGINAL retained images containing this class

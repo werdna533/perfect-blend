@@ -1,13 +1,13 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import * as d3 from 'd3';
 import type { BubbleRecord, CategoryInfo } from '../types';
 
 export const CLASS_COLORS = [
-  '#FF4040', '#4060FF', '#30C060', '#FFB020', '#E040A0',
-  '#8040E0', '#FF8060', '#20D0A0', '#F0E040', '#FF6B6B',
-  '#5B8DEF', '#50D080', '#FFC840', '#F060B0', '#A060F0',
-  '#FF9080', '#40E0B0', '#F0F060', '#E06040', '#6080FF',
-  '#40D070',
+  '#FF4040', '#4060FF', '#1fe260', '#f7ba49', '#E040A0',
+  '#8040E0', '#FF8060', '#20D0A0', '#600b0b', '#c95656',
+  '#143475', '#235f3a', '#ffb700', '#b80065', 'rgb(207, 169, 255)',
+  '#ffc1b7', '#40E0B0', '#747400', '#cf421e', '#5366b4',
+  '#52d67e',
 ];
 
 interface BubbleChartProps {
@@ -63,9 +63,9 @@ export default function BubbleChart({ data, categories, title, showLegend = true
     return () => observer.disconnect();
   }, []);
 
-  const handleLegendClick = useCallback((className: string) => {
-    setSelectedClass(prev => (prev === className ? null : className));
-  }, []);
+  const handleLegendClick = (className: string) => {
+    setSelectedClass(selectedClass === className ? null : className);
+  };
 
   // D3 rendering — mirrors the Observable clustered-bubbles demo exactly
   useEffect(() => {
@@ -116,7 +116,7 @@ export default function BubbleChart({ data, categories, title, showLegend = true
         })
         .on('click', (_event, d) => {
           const cls = getClass(d);
-          setSelectedClass(prev => (prev === cls ? null : cls));
+          setSelectedClass(selectedClass === cls ? null : cls);
         });
     }
 
@@ -157,7 +157,7 @@ export default function BubbleChart({ data, categories, title, showLegend = true
     // ── forceCluster: exact Observable centroid-pull algorithm ───────────────
 
     function makeForceCluster() {
-      const strength = 0.25;
+      const strength = 0.14;
       let simNodes: SimNode[];
 
       function centroid(group: SimNode[]) {
@@ -186,8 +186,8 @@ export default function BubbleChart({ data, categories, title, showLegend = true
     // ── forceCollide: exact Observable quadtree rigid-collision algorithm ────
 
     function makeForceCollide() {
-      const rigidity   = 0.7;   // higher = resolves overlap faster per iteration
-      const iterations  = 3;    // run multiple passes per tick to settle quickly
+      const rigidity   = 0.42;  // softer correction to avoid violent jitter
+      const iterations  = 2;    // enough to resolve overlaps without harsh motion
       const padding1   = 2;    // same-class separation
       const padding2   = 6;    // cross-class separation
       let simNodes: SimNode[];
@@ -237,10 +237,10 @@ export default function BubbleChart({ data, categories, title, showLegend = true
     // ── simulation (live — required for drag to work) ────────────────────────
 
     const simulation = d3.forceSimulation(nodes as d3.SimulationNodeDatum[])
-      .alphaDecay(0.028)
-      .velocityDecay(0.45)
-      .force('x', d3.forceX(chartWidth / 2).strength(0.04))
-      .force('y', d3.forceY(height / 2).strength(0.04))
+      .alphaDecay(0.03)
+      .velocityDecay(0.58)
+      .force('x', d3.forceX(chartWidth / 2).strength(0.025))
+      .force('y', d3.forceY(height / 2).strength(0.025))
       .force('cluster', layoutMode === 'clustered' ? makeForceCluster() as any : null)
       .force('collide', makeForceCollide() as any);
 

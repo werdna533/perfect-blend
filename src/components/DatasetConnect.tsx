@@ -33,7 +33,7 @@ export default function DatasetConnect({ onConnect, loading }: DatasetConnectPro
               type="text"
               value={path}
               onChange={e => setPath(e.target.value)}
-              placeholder="/path/to/your/dataset"
+              placeholder="\path\to\your\dataset"
               className="w-full px-4 py-3 border border-border bg-bg text-text text-sm focus:outline-none focus:border-kiwi"
             />
           </div>
