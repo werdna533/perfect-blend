@@ -33,6 +33,7 @@ export default function App() {
   const [resultsSelected, setResultsSelected] = useState<string | null>(null);
   const [visualizeSelected, setVisualizeSelected] = useState<string | null>(null);
   const [outputName, setOutputName] = useState('balanced_dataset');
+  const [tableExpanded, setTableExpanded] = useState(false);
 
   const stepIndex = STEPS.findIndex(s => s.key === step);
 
@@ -260,43 +261,52 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Per-class table */}
-              <div className="bg-surface border border-border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-bg">
-                      <th className="text-left px-4 py-2 font-semibold text-text-muted">Class</th>
-                      <th className="text-right px-4 py-2 font-semibold text-text-muted">Before</th>
-                      <th className="text-right px-4 py-2 font-semibold text-text-muted">After</th>
-                      <th className="text-right px-4 py-2 font-semibold text-text-muted">Change</th>
-                      <th className="text-center px-4 py-2 font-semibold text-text-muted">Strategy</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parseResult.distribution.map(d => {
-                      const after = afterDistMap.get(d.class_name) ?? 0;
-                      const pct = d.count > 0 ? Math.round(((after - d.count) / d.count) * 100) : 0;
-                      const strategy = analysis?.classes.find(c => c.class_name === d.class_name)?.strategy ?? 'keep';
-                      const strategyStyle =
-                        strategy === 'upsample' ? 'bg-kiwi/15 text-kiwi border border-kiwi/30' :
-                        strategy === 'downsample' ? 'bg-strawberry/15 text-strawberry border border-strawberry/30' :
-                        'bg-border/50 text-text-muted border border-border';
-                      return (
-                        <tr key={d.class_name} className="border-b border-border last:border-0">
-                          <td className="px-4 py-2 font-medium text-text">{d.class_name}</td>
-                          <td className="px-4 py-2 text-right text-text-muted">{d.count.toLocaleString()}</td>
-                          <td className="px-4 py-2 text-right font-medium text-text">{after.toLocaleString()}</td>
-                          <td className={`px-4 py-2 text-right font-semibold ${pct < 0 ? 'text-strawberry' : pct > 0 ? 'text-kiwi' : 'text-text-muted'}`}>
-                            {pct > 0 ? '+' : ''}{pct}%
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            <span className={`text-xs font-medium px-2 py-0.5 ${strategyStyle}`}>{strategy}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              {/* Per-class table (collapsible) */}
+              <div className="bg-surface border border-border">
+                <button
+                  onClick={() => setTableExpanded(prev => !prev)}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-sm text-text-muted hover:text-text transition-colors text-left"
+                >
+                  <span>{tableExpanded ? '▾' : '▸'}</span>
+                  <span>Per-class breakdown</span>
+                </button>
+                {tableExpanded && (
+                  <table className="w-full text-sm border-t border-border">
+                    <thead>
+                      <tr className="border-b border-border bg-bg">
+                        <th className="text-left px-4 py-2 font-semibold text-text-muted">Class</th>
+                        <th className="text-right px-4 py-2 font-semibold text-text-muted">Before</th>
+                        <th className="text-right px-4 py-2 font-semibold text-text-muted">After</th>
+                        <th className="text-right px-4 py-2 font-semibold text-text-muted">Change</th>
+                        <th className="text-center px-4 py-2 font-semibold text-text-muted">Strategy</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parseResult.distribution.map(d => {
+                        const after = afterDistMap.get(d.class_name) ?? 0;
+                        const pct = d.count > 0 ? Math.round(((after - d.count) / d.count) * 100) : 0;
+                        const strategy = analysis?.classes.find(c => c.class_name === d.class_name)?.strategy ?? 'keep';
+                        const strategyStyle =
+                          strategy === 'upsample' ? 'bg-kiwi/15 text-kiwi border border-kiwi/30' :
+                          strategy === 'downsample' ? 'bg-strawberry/15 text-strawberry border border-strawberry/30' :
+                          'bg-border/50 text-text-muted border border-border';
+                        return (
+                          <tr key={d.class_name} className="border-b border-border last:border-0">
+                            <td className="px-4 py-2 font-medium text-text">{d.class_name}</td>
+                            <td className="px-4 py-2 text-right text-text-muted">{d.count.toLocaleString()}</td>
+                            <td className="px-4 py-2 text-right font-medium text-text">{after.toLocaleString()}</td>
+                            <td className={`px-4 py-2 text-right font-semibold ${pct < 0 ? 'text-strawberry' : pct > 0 ? 'text-kiwi' : 'text-text-muted'}`}>
+                              {pct > 0 ? '+' : ''}{pct}%
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <span className={`text-xs font-medium px-2 py-0.5 ${strategyStyle}`}>{strategy}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-6">
